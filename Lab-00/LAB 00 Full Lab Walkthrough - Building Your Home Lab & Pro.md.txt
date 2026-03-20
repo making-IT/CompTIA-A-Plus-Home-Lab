@@ -1,0 +1,1729 @@
+**LAB 00: Building Your Home Lab & Professional Portfolio Infrastructure**
+
+## **Lab Overview**
+
+This lab builds everything that supports Labs 01–14. By the end, you will have a fully functional virtual environment, a help desk ticketing system, a GitHub portfolio, and a Hashnode blog ready to publish. No fictional company — this is **your** infrastructure.
+
+**Estimated Total Time:** 5–7 hours (split across 2 sessions recommended)
+
+**Difficulty:** ⭐☆☆☆☆ (long, not hard)
+
+---
+
+## **What You'll Build**
+
+When Lab 00 is complete, you will have:
+
+```
+
+PC (Host)
+│
+├── VirtualBox 7.x (Hypervisor)
+│   ├── NAT Network: "LabNAT" (10.0.2.0/24 — internet access)
+│   ├── Host-Only Network: "LabLAN" (192.168.56.0/24 — internal)
+│   │
+│   ├── [VM] osTicket-Server (Ubuntu Server 22.04)
+│   │     └── Apache + MySQL + PHP + osTicket
+│   │     └── IP: 192.168.56.10
+│   │     └── Status: RUNNING
+│   │
+│   ├── [VM] Win10-PC01 (Shell — empty, configured, not installed)
+│   │     └── IP: 192.168.56.100 (future)
+│   │
+│   ├── [VM] Win11-PC01 (Shell — empty, configured, not installed)
+│   │     └── IP: 192.168.56.101 (future)
+│   │
+│   ├── [VM] Ubuntu-PC01 (Shell — empty, configured, not installed)
+│   │     └── IP: 192.168.56.102 (future)
+│   │
+│   └── [VM] Mint-PC01 (Shell — empty, configured, not installed)
+│         └── IP: 192.168.56.103 (future)
+│
+|── Documentation Method (your choice of platform)
+│
+│
+└── ISOs Folder
+    ├── Windows 10 Enterprise Evaluation
+    ├── Windows 11 Enterprise Evaluation
+    ├── Ubuntu Desktop 22.04.x LTS
+    ├── Linux Mint 21.x
+    └── Ubuntu Server 22.04.x LTS
+```
+
+---
+
+## **PART A: VirtualBox Installation & Configuration**
+
+*Estimated Time: 30 minutes*
+
+---
+
+### **A1: Download VirtualBox**
+
+1. Open your browser and navigate to:
+    
+    ```
+    
+    https://www.virtualbox.org/wiki/Downloads
+    ```
+    
+2. Under **VirtualBox platform packages**, click **Windows hosts**
+3. The file **`VirtualBox-7.x.x-xxxxx-Win.exe`** will download (~100MB)
+4. While that downloads, scroll down on the same page to **VirtualBox Extension Pack** — click **All supported platforms** to download:
+    
+    ```
+    
+    Oracle_VirtualBox_Extension_Pack-7.x.x.vbox-extpack
+    ```
+    
+    > ***Why the Extension Pack? It adds USB 2.0/3.0 support, disk encryption, PXE boot, and other features we'll need for peripheral and USB labs.***
+    > 
+5. Save both files to your **`Downloads`** folder
+
+![image.png](attachment:de510f1d-3947-4e89-b1a2-5ae0a1b4884b:image.png)
+
+---
+
+### **A2: Install VirtualBox**
+
+1. Right-click **`VirtualBox-7.x.x-xxxxx-Win.exe`** → **Run as administrator**
+2. Click **Next** on the welcome screen
+3. On the **Custom Setup** screen:
+    - Leave all features selected (default)
+    - **Change the installation path** to:
+        
+        ```
+        
+        C:\Program Files\Oracle\VirtualBox\
+        ```
+        
+    - Click **Next**
+4. On the **Warning: Network Interfaces** screen:
+    - This warns that installation will temporarily reset your network connection
+    - Click **Yes** to proceed
+5. Click **Install**
+6. If prompted by Windows Security, click **Install** to trust Oracle's drivers
+7. Check **Start Oracle VirtualBox after installation**
+8. Click **Finish**
+
+![image.png](attachment:e56c338a-354c-4194-8713-2f79185a8b72:image.png)
+
+---
+
+### **A3: Install Extension Pack**
+
+1. In VirtualBox Manager, go to **File → Tools → Extension Pack Manager**
+    
+    (In VirtualBox 7.0+: you may also go to **File → Preferences → Extensions**)
+    
+2. Click the **Install** button (green "+" icon)
+3. Navigate to your Downloads folder and select:
+    
+    ```
+    
+    Oracle_VirtualBox_Extension_Pack-7.x.x.vbox-extpack
+    ```
+    
+4. Read the license agreement, scroll to the bottom, click **I Agree**
+5. Wait for installation to complete
+6. Verify the Extension Pack shows as **Active** in the list
+
+![image.png](attachment:41196108-cb29-4dc2-9294-6e9f0bc14877:image.png)
+
+---
+
+### **A4: Configure Global Preferences**
+
+1. Go to **File → Preferences** (or press **`Ctrl+G`**)
+2. **General** tab:
+    - **Default Machine Folder:** Change this to a dedicated location:
+        
+        ```
+        
+        C:\VirtualBox_VMs
+        ```
+        
+    - Create this folder if it doesn't exist
+    
+    > ***Why? Keeping VMs off the system drive (if you have multiple drives) or in a predictable location makes backup and management easier. On your 1TB drive, space isn't an issue — organization is.***
+    > 
+3. Click **OK**
+4. Create the ISO storage folder:
+    
+    ```
+    
+    C:\VirtualBox_ISOs
+    ```
+    
+5. Create a lab documentation folder:
+    
+    ```
+    
+    C:\HomeLab
+    ```
+    
+
+[📸 SCREENSHOT: Preferences showing your Default Machine Folder]
+
+**Verification:** Open File Explorer and confirm these three folders exist:
+
+- **`C:\VirtualBox_VMs`**
+- **`C:\VirtualBox_ISOs`**
+- **`C:\HomeLab`**
+
+---
+
+## **PART B: Virtual Network Architecture**
+
+*Estimated Time: 20 minutes*
+
+---
+
+### **B1: Understanding VirtualBox Network Modes**
+
+Before configuring, here's what each mode does and when we use it:
+
+| **Mode** | **Internet Access** | **VM-to-VM** | **Host-to-VM** | **Our Use Case** |
+| --- | --- | --- | --- | --- |
+| **NAT** | ✅ | ❌ | ❌ | Quick internet for single VM |
+| **NAT Network** | ✅ | ✅ | ❌ | VMs sharing internet access |
+| **Host-Only** | ❌ | ✅ | ✅ | Simulated office LAN — our primary lab network |
+| **Bridged** | ✅ | ✅ | ✅ | Not used (exposes VMs to real network) |
+| **Internal** | ❌ | ✅ | ❌ | Isolated testing (future labs) |
+
+**Our architecture uses two networks per VM:**
+
+- **Adapter 1 (NAT):** Gives each VM internet access for updates, downloads
+- **Adapter 2 (Host-Only):** Simulates the office LAN where all machines see each other and the host can access them
+
+---
+
+### **B2: Create/Configure Host-Only Network**
+
+1. In VirtualBox Manager, go to **File → Tools → Network Manager**
+    
+    (Or **File → Host Network Manager** in some versions)
+    
+2. Click the **Create** button to create a new Host-Only Network
+    - It will be named **`VirtualBox Host-Only Ethernet Adapter`** (or **`vboxnet0`** on some versions)
+3. Select the new network and click **Properties**
+4. Configure the **Adapter** tab:
+    
+    ```
+    text
+    IPv4 Address:     192.168.56.1
+    IPv4 Network Mask: 255.255.255.0
+    ```
+    
+5. Configure the **DHCP Server** tab:
+    - **Enable Server:** ✅ Checked
+    
+    ```
+    text
+    Server Address:   192.168.56.100
+    Server Mask:      255.255.255.0
+    Lower Bound:      192.168.56.100
+    Upper Bound:      192.168.56.200
+    ```
+    
+    > ***Why enable DHCP? Client VMs will get addresses automatically during initial setup. We'll assign static IPs later in specific labs. The osTicket server will get a static IP manually.***
+    > 
+6. Click **Apply** then **Close**
+
+ Host-Only Network configuration showing IP settings
+
+![image.png](attachment:70fb7da2-9a96-46ff-aebe-7a2bfe2b4a37:image.png)
+
+ DHCP Server settings
+
+![image.png](attachment:40b2c3a3-0126-4991-95c6-13fe0a2673a7:image.png)
+
+---
+
+### **B3: Verify Host-Only Network on Your Host**
+
+1. Open **Command Prompt** (press **`Win+R`**, type **`cmd`**, press Enter)
+2. Run:
+    
+    ```
+    cmd
+    ipconfig /all
+    ```
+    
+3. Look for an adapter named **VirtualBox Host-Only Network** or similar. Confirm:
+    
+    ```
+    text
+    IPv4 Address:      192.168.56.1
+    Subnet Mask:       255.255.255.0
+    ```
+    
+
+---
+
+![image.png](attachment:4c4e26fc-e912-4ceb-8fa4-ee00151d2246:image.png)
+
+### **B4: Network Architecture Documentation**
+
+Create a file **`C:\HomeLab\network-documentation.md`** and paste the following:
+
+```
+Markdown
+# Home Lab Network Documentation
+
+## Network Architecture
+
+### Host Machine
+- Hostname: [YOUR-COMPUTER-NAME]
+- Host OS: Windows [10/11]
+- Host-Only IP: 192.168.56.1
+
+### Networks
+| Network Name | Type | Subnet | Purpose |
+|---|---|---|---|
+| Default NAT | NAT | 10.0.2.0/24 | Internet access for VMs |
+| LabLAN | Host-Only | 192.168.56.0/24 | Internal lab network |
+
+### IP Address Assignments
+| Hostname | Role | IP Address | OS | Status |
+|---|---|---|---|---|
+| Host | Physical Machine | 192.168.56.1 | Windows | Active |
+| osTicket-Server | Help Desk Server | 192.168.56.10 | Ubuntu Server 22.04 | Pending |
+| Win10-PC01 | Client Workstation | 192.168.56.100 | Windows 10 | Pending |
+| Win11-PC01 | Client Workstation | 192.168.56.101 | Windows 11 | Pending |
+| Ubuntu-PC01 | Client Workstation | 192.168.56.102 | Ubuntu 22.04 | Pending |
+| Mint-PC01 | Client Workstation | 192.168.56.103 | Linux Mint 21 | Pending |
+```
+
+### **Network Diagram**
+
+```
+text
+               ┌──────────────┐
+               │   INTERNET   │
+               └──────┬───────┘
+                      │
+          ┌───────────┴───────────┐
+          │   NAT (10.0.2.0/24)   │   ← Each VM gets its own NAT
+          │   Gateway: 10.0.2.2   │     for internet access
+          └───────────┬───────────┘
+                      │
+    ┌─────┬─────┬─────┼─────┬─────┐
+    │     │     │     │     │     │
+  ┌─┴─┐┌─┴─┐┌─┴─┐┌──┴─┐┌─┴──┐┌─┴──┐
+  │SVR ││W10 ││W11 ││UBU ││MINT││HOST│
+  │ .10││.100││.101││.102││.103││ .1 │
+  └─┬──┘└─┬──┘└─┬──┘└─┬──┘└─┬──┘└─┬──┘
+    │     │     │     │     │     │
+  ┌─┴─────┴─────┴─────┴─────┴─────┴──┐
+  │   Host-Only (192.168.56.0/24)     │  ← All VMs + Host
+  │   "Office LAN" simulation         │    communicate here
+  └────────────────────────────────────┘
+```
+
+---
+
+## **PART C: ISO Acquisition**
+
+*Estimated Time: 30–60 minutes (download dependent)*
+
+---
+
+### **C1: Windows 10 Pro Evaluation**
+
+**Microsoft has removed the direct ISO download** (no longer supported), we will use Windows 10 Pro instead.
+
+Media Creation Tool
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Go to:
+https://www.microsoft.com/en-us/software-download/windows10
+
+STEP 2: If on Windows, it pushes the Media Creation Tool
+Download and run it
+
+STEP 3: Select "Create installation media for another PC"
+
+STEP 4: Choose:
+Language:      English (United States)
+Edition:       Windows 10
+Architecture:  64-bit
+
+STEP 5: Select "ISO file" (not USB)
+
+STEP 6: Save to C:\VirtualBox_ISOs\
+
+NOTE: This gives you Windows 10 Home/Pro, not Enterprise.
+For a home lab this works fine — the core skills are
+identical. Enterprise features (BitLocker, Group Policy)
+are available in Pro.
+
+---
+
+### **C2: Windows 11 Enterprise Evaluation**
+
+1. Navigate to:
+    
+    ```
+    
+    https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise
+    ```
+    
+2. Same process as above — download the **64-bit ISO**
+3. Save to **`C:\VirtualBox_ISOs\`**
+4. Rename to:
+    
+    ```
+    
+    Windows11_Enterprise_Eval.iso
+    ```
+    
+
+---
+
+### **C3: Ubuntu Desktop 22.04 LTS**
+
+1. Navigate to:
+    
+    ```
+    
+    https://releases.ubuntu.com/22.04/
+    ```
+    
+2. Download the **Desktop image** (ubuntu-22.04.x-desktop-amd64.iso)
+3. Save to **`C:\VirtualBox_ISOs\`**
+
+> ***Why 22.04 and not 24.04? Version 22.04 LTS has mature driver support in VirtualBox and guaranteed compatibility with all tools we'll use. You can use 24.04 if you prefer.***
+> 
+
+---
+
+### **C4: Linux Mint 21**
+
+1. Navigate to:
+    
+    ```
+    
+    https://www.linuxmint.com/download.php
+    ```
+    
+2. Select **Cinnamon Edition** (most user-friendly desktop)
+3. Choose any mirror and download
+4. Save to **`C:\VirtualBox_ISOs\`**
+
+---
+
+### **C5: Ubuntu Server 22.04 LTS**
+
+1. Navigate to:
+    
+    ```
+    
+    https://releases.ubuntu.com/22.04/
+    ```
+    
+2. Download the **Server install image** (ubuntu-22.04.x-live-server-amd64.iso)
+3. Save to **`C:\VirtualBox_ISOs\`**
+
+---
+
+### **C6: Verify Your ISO Collection**
+
+Open **`C:\VirtualBox_ISOs\`** and confirm you have 5 files:
+
+```
+
+C:\VirtualBox_ISOs\
+├── Windows10_Enterprise_Eval.iso       (~5 GB)
+├── Windows11_Enterprise_Eval.iso       (~5 GB)
+├── ubuntu-22.04.x-desktop-amd64.iso    (~3.6 GB)
+├── linuxmint-21.x-cinnamon-64bit.iso   (~2.7 GB)
+└── ubuntu-22.04.x-live-server-amd64.iso (~1.8 GB)
+```
+
+![image.png](attachment:22d036ad-b246-4b5b-974c-d7d0e4f0780d:image.png)
+
+---
+
+## **PART D: osTicket Server Build**
+
+*Estimated Time: 90 minutes*
+
+This is the most involved section of Lab 00. Take your time — this server supports every future lab.
+
+---
+
+### **D1: Create the Ubuntu Server VM**
+
+1. In VirtualBox Manager, click **New** (or **`Ctrl+N`**)
+2. **Name and Operating System:**
+    
+    ```
+    
+    Name:      osTicket-Server
+    Folder:    C:\VirtualBox_VMs (should be default)
+    ISO Image: C:\VirtualBox_ISOs\ubuntu-22.04.x-live-server-amd64.iso
+    Type:      Linux
+    Version:   Ubuntu (64-bit)
+    ```
+    
+    - **Uncheck** "Skip Unattended Installation" if it appears checked — actually we WANT to **skip** the unattended install, so make sure **Unattended Installation is disabled/skipped**
+    
+    > ***In VirtualBox 7.0, if you attach an ISO and it detects a supported OS, it may try to do an unattended install. We want manual control. Check the box that says "Skip Unattended Installation."***
+    > 
+3. Click **Next**
+4. **Hardware:**
+    
+    ```
+    
+    Base Memory: 2048 MB (2 GB)
+    Processors:  1 CPU
+    ```
+    
+5. Click **Next**
+6. **Virtual Hard Disk:**
+    
+    ```
+    
+    Create a Virtual Hard Disk Now: Selected
+    Disk Size: 20 GB
+    ```
+    
+    - Leave "Pre-allocate Full Size" **unchecked** (dynamic allocation saves space)
+7. Click **Next**, review the summary, click **Finish**
+
+---
+
+### **D2: Configure VM Network Adapters**
+
+Before booting, configure the network:
+
+1. Select **osTicket-Server** in the VM list → click **Settings**
+2. Go to **Network**:
+    
+    **Adapter 1:**
+    
+    ```
+    
+    Enable Network Adapter: ✅
+    Attached to: NAT
+    ```
+    
+    **Adapter 2:**
+    
+    - Click the **Adapter 2** tab
+    
+    ```
+    
+    Enable Network Adapter: ✅
+    Attached to: Host-only Adapter
+    Name: VirtualBox Host-Only Ethernet Adapter
+    ```
+    
+3. Click **OK**
+
+Adapter 1 (NAT) settings
+
+![image.png](attachment:39ebba50-1563-44aa-a8be-48d3da8af426:image.png)
+
+Adapter 2 (Host-Only) settings
+
+![image.png](attachment:16dcbdad-4813-43c5-8338-8f7e403709ae:image.png)
+
+---
+
+### **D3:**
+
+### **Install Ubuntu Server 22.04**
+
+1. Select **osTicket-Server** and click **Start**
+2. The VM boots from the ISO. You'll see the Ubuntu Server installer.
+3. **Language:** Select **English** → press Enter
+4. **Installer Update:** If prompted to update the installer, select **Continue without updating** (faster, avoids issues)
+5. **Keyboard Configuration:**
+    
+    ```
+    
+    Layout:  English (US)
+    Variant: English (US)
+    ```
+    
+    Select **Done**
+    
+6. **Choose type of install:** Select **Ubuntu Server** (not minimized)
+7. **Network Connections:**
+    - You should see two interfaces:
+        - **`enp0s3`** — connected via DHCPv4 (this is your NAT adapter)
+        - **`enp0s8`** — may show "not configured" (this is your Host-Only adapter)
+    - **Leave defaults for now** — we'll configure the static IP after installation
+    - Select **Done**
+8. **Configure Proxy:** Leave blank → **Done**
+9. **Ubuntu Archive Mirror:** Leave default → **Done**
+10. **Guided Storage Configuration:**
+    - Select **Use an Entire Disk**
+    - **Leave LVM unchecked** (simpler for our lab)
+    - Select **Done**
+11. **Storage Configuration Summary:** Review → Select **Done**
+    - Confirm destructive action → **Continue**
+12. **Profile Setup:**
+    
+    ```
+    
+    Your name:          Lab Admin
+    Your server's name: osticket-server
+    Pick a username:    labadmin
+    Choose a password:  *************                      
+    Confirm password:   ************
+    ```
+    
+    > ***Important: Write these credentials down. You'll use them constantly.***
+    > 
+13. **Upgrade to Ubuntu Pro:** Select **Skip for now** → **Continue**
+14. **SSH Setup:**
+    - **Install OpenSSH Server:** ✅ Check this box
+    - This allows you to SSH from your host, which is more comfortable than the VM console
+    - Select **Done**
+15. **Featured Server Snaps:** Don't select anything → **Done**
+16. Wait for installation to complete (5-10 minutes)
+17. When you see **"Installation complete!"**, select **Reboot Now**
+18. If prompted "Please remove installation medium," just press **Enter** (VirtualBox handles this automatically)
+19. Wait for the server to boot. Log in with:
+    
+    ```
+    
+    Username: labadmin
+    Password: *******
+    ```
+    
+
+[📸 SCREENSHOT: Successful login to Ubuntu Server terminal]
+
+---
+
+### **D4: Post-Install System Configuration**
+
+1. **Update the system:**
+    
+    ```
+    
+    sudo apt update &&sudo apt upgrade -y
+    ```
+    
+    Enter your password when prompted. This may take several minutes.
+    
+2. **Configure the static IP on the Host-Only adapter:**
+    
+    First, identify your network interfaces:
+    
+    ```
+    
+    ip addr show
+    ```
+    
+    You should see:
+    
+    - **`lo`** — loopback
+    - **`enp0s3`** — NAT adapter (has a 10.0.2.x address)
+    - **`enp0s8`** — Host-Only adapter (may have a 192.168.56.x DHCP address or no address)
+    
+    ![image.png](attachment:258917c1-5915-4a4d-840a-5884ec55b34d:image.png)
+    
+3. **Edit the Netplan configuration:**
+    
+    ```
+    
+    sudo nano /etc/netplan/00-installer-config.yaml
+    ```
+    
+4. **Replace the contents** with (be careful with YAML spacing — use exactly 2 spaces for each indent level, **no tabs**):
+    
+    ```
+    YAML
+    network:
+      ethernets:
+        enp0s3:
+          dhcp4:true
+        enp0s8:
+          addresses:
+            -192.168.56.10/24
+      version:2
+    ```
+    
+    > ***What this does: ← FIXED
+        ◦ `enp0s3` (NAT): Gets IP automatically for internet access
+        ◦ `enp0s8` (Host-Only): Gets static IP 192.168.56.10 — this is how your host machine will reach osTicket***
+    > 
+5. **Save and exit:** Press **`Ctrl+O`**, then **`Enter`**, then **`Ctrl+X`**
+6. **Apply the network configuration:**
+    
+    ```
+    
+    sudo netplan apply
+    ```
+    
+7. **Verify the static IP:**
+    
+    ```
+    
+    ip addr show enp0s8
+    ```
+    
+    You should see:
+    
+    ```
+    
+    inet 192.168.56.10/24
+    ```
+    
+8. **Verify internet connectivity:** 
+    
+    ```
+    
+    ping -c 4 google.com
+    ```
+    
+    You should see 4 successful replies.
+    
+    ![image.png](attachment:2b6779e4-b541-4316-859f-523bb14f71f0:image.png)
+    
+9. **Test connectivity from your HOST machine.** Open Command Prompt on your Alienware: 
+    
+    ```
+    
+    ping 192.168.56.10
+    ```
+    
+    You should see successful replies. If not, verify the Host-Only network is configured correctly in Part B.
+    
+    ![image.png](attachment:140561fd-decd-4692-96b3-4a1df8893669:image.png)
+    
+
+---
+
+### **D5: Install Apache Web Server**
+
+Back in the Ubuntu Server terminal:
+
+1. **Install Apache:**
+    
+    ```
+    
+    sudo apt install apache2 -y
+    ```
+    
+2. **Enable and start Apache:**
+    
+    ```
+    
+    sudo systemctl enable apache2
+    sudo systemctl start apache2
+    ```
+    
+3. **Verify Apache is running:**
+    
+    ```
+    
+    sudo systemctl status apache2
+    ```
+    
+    Look for **`Active: active (running)`** in green.
+    
+4. **Test from your HOST browser.** Open a browser on your Alienware and navigate to:
+    
+    ```
+    
+    http://192.168.56.10
+    ```
+    
+    You should see the **Apache2 Ubuntu Default Page** — a page that says "It works!"
+    
+
+![image.png](attachment:5ab00576-f01d-42c8-8f2f-dc4ed44cab79:image.png)
+
+---
+
+### **D6: Install MySQL Database Server**
+
+1. **Install MySQL:** 
+    
+    ```
+    
+    sudo apt install mysql-server -y
+    ```
+    
+2. **Enable and start MySQL:**
+    
+    ```
+    
+    sudo systemctl enable mysql
+    sudo systemctl start mysql
+    ```
+    
+3. **Secure the MySQL installation:**
+    
+    ```
+    
+    sudo mysql_secure_installation
+    ```
+    
+    Answer the prompts:
+    
+    ```
+    
+    VALIDATE PASSWORD COMPONENT:          n
+    New password:                          LabMySQL2024!
+    Re-enter new password:                ************
+    Remove anonymous users:               y
+    Disallow root login remotely:         y
+    Remove test database:                 y
+    Reload privilege tables:              y
+    ```
+    
+4. **Create the osTicket database and user:**
+    
+    ```
+    
+    sudo mysql
+    ```
+    
+    At the **`mysql>`** prompt, enter each line followed by Enter:
+    
+    ```
+    
+    CREATE DATABASE osticket;
+    CREATE USER 'osticket_user'@'localhost' IDENTIFIEDBY 'osTicketDB2024!';
+    GRANT ALL PRIVILEGESON osticket.* TO 'osticket_user'@'localhost';
+    FLUSH PRIVILEGES;
+    EXIT;
+    ```
+    
+    ![image.png](attachment:24c6cd8a-54c9-4894-9b01-52333933e796:image.png)
+    
+
+---
+
+### **D7: Install PHP and Required Extensions**
+
+1. **Install PHP and all extensions required by osTicket:**
+    
+    ```
+    
+    sudo apt install php php-mysql php-cgi php-fpm php-cli php-curl php-gd php-imap php-mbstring php-intl php-apcu php-xml php-zip -y
+    ```
+    
+2. **Verify PHP installation:**
+    
+    ```
+    
+    php -v
+    ```
+    
+    You should see PHP 8.1.x.
+    
+3. **Enable Apache mod_rewrite** (required for osTicket):
+    
+    ```
+    
+    sudo a2enmod rewrite
+    sudo systemctl restart apache2
+    ```
+    
+
+---
+
+### **D8: Download and Install osTicket**
+
+1. **Install unzip utility:**
+    
+    ```
+    
+    sudo apt install unzip -y
+    ```
+    
+2. **Download osTicket** (check [**https://osticket.com/download/**](https://osticket.com/download/) for the latest version — using v1.18.1 as reference):
+    
+    ```
+    
+    cd /tmp
+    wget https://github.com/osTicket/osTicket/releases/download/v1.18.1/osTicket-v1.18.1.zip
+    ```
+    
+    > ***If this URL doesn't work: Go to `https://github.com/osTicket/osTicket/releases` in your host browser, find the latest release, right-click the .zip download link, copy the URL, and paste it into the wget command.***
+    > 
+3. **Extract osTicket:**
+    
+    ```
+    
+    unzip osTicket-v1.18.1.zip -d /tmp/osticket
+    ```
+    
+4. **Move the upload directory to Apache's web root:**
+    
+    ```
+    
+    sudo mv /tmp/osticket/upload /var/www/html/osticket
+    ```
+    
+5. **Create the configuration file from the sample:**
+    
+    ```
+    
+    sudo cp /var/www/html/osticket/include/ost-sampleconfig.php /var/www/html/osticket/include/ost-config.php
+    ```
+    
+6. **Set proper permissions:**
+    
+    ```
+    
+    sudo chown -R www-data:www-data /var/www/html/osticket
+    sudo chmod 0666 /var/www/html/osticket/include/ost-config.php
+    ```
+    
+
+---
+
+### **D9: Configure osTicket via Web Installer**
+
+1. **On your HOST machine**, open a browser and navigate to:
+    
+    ```
+    
+    http://192.168.56.10/osticket/setup/
+    ```
+    
+2. You should see the **osTicket Installer** page showing prerequisites. Verify that most items show green checkmarks. If **`php-imap`** shows a warning, it's non-critical for our lab.
+3. Click **Continue**
+4. **System Settings:**
+    
+    ```
+    
+    Helpdesk Name:         HomeLab IT Support
+    Default Email:         helpdesk@homelab.local
+    ```
+    
+5. **Admin User:**
+    
+    ```
+    
+    First Name:           Lab
+    Last Name:            Admin
+    Email Address:        admin@homelab.local
+    Username:             your choice
+    Password:             *********
+    Confirm Password:     *********
+    ```
+    
+6. **Database Settings:**
+    
+    ```
+    
+    MySQL Table Prefix:    ost_
+    MySQL Hostname:        localhost
+    MySQL Database:        osticket
+    MySQL Username:        osticket_user
+    MySQL Password:        **********
+    ```
+    
+7. Click **Install Now**
+8. You should see **"Congratulations!"** — osTicket has been installed.
+
+![image.png](attachment:77a53876-e364-443c-89b8-6e985e787755:image.png)
+
+1. **Important post-installation steps.** Back in the Ubuntu Server terminal: 
+    
+    **Lock down the config file:**
+    
+    ```
+    
+    sudo chmod 0644 /var/www/html/osticket/include/ost-config.php
+    ```
+    
+    **Remove the setup directory:**
+    
+    ```
+    
+    sudo rm -rf /var/www/html/osticket/setup
+    ```
+    
+2. **Bookmark these URLs on your HOST browser:** 
+    
+    ```
+    
+    Staff Panel:  http://192.168.56.10/osticket/scp/
+    Client Portal: http://192.168.56.10/osticket/
+    ```
+    
+3. **Log in to the Staff Panel:** 
+    
+    ```
+    text
+    URL:      http://192.168.56.10/osticket/scp/
+    Username: labadmin
+    Password: *********
+    ```
+    
+
+![image.png](attachment:a6db6dd1-9e4c-46f7-9812-b233df49c874:image.png)
+
+---
+
+### **D10: Configure osTicket for the Lab Series**
+
+Now let's set up the ticketing structure that mirrors a real IT department.
+
+### **SLA Plans**
+
+1. In the Staff Panel, go to **Admin Panel → Manage → SLA**
+2. Click **Add New SLA Plan** and create four plans:
+    
+    
+    | **Name** | **Grace Period** | **Schedule** |
+    | --- | --- | --- |
+    | **SEV-A (Critical)** | 1 hour | 24/7 |
+    | **SEV-B (High)** | 4 hours | 24/5 |
+    | **SEV-C (Normal)** | 8 hours | Monday–Friday 8am–5pm |
+    | **SEV-D (Low)** | 24 hours | Monday–Friday 8am–5pm |
+
+### **Departments**
+
+1. Go to **Admin Panel → Agents → Departments**
+2. A default "Support" department exists. Add:
+    
+    
+    | **Department** | **Type** |
+    | --- | --- |
+    | **IT Support** | Public |
+    | **System Administration** | Public |
+    | **Networking** | Public |
+
+### **Help Topics**
+
+1. Go to **Admin Panel → Manage → Help Topics**
+2. Create the following:
+    
+    
+    | **Help Topic** | **Department** | **SLA** |
+    | --- | --- | --- |
+    | **Password Reset** | IT Support | SEV-D |
+    | **Hardware Issue** | IT Support | SEV-C |
+    | **Software Issue** | IT Support | SEV-C |
+    | **Network Connectivity** | Networking | SEV-B |
+    | **Access / Permissions** | IT Support | SEV-C |
+    | **Workstation Not Booting** | IT Support | SEV-B |
+    | **Malware / Security Incident** | System Administration | SEV-A |
+    | **New Employee Setup** | IT Support | SEV-C |
+    | **Printer Issue** | IT Support | SEV-D |
+    | **General Inquiry** | IT Support | SEV-D |
+
+### **Teams**
+
+1. Go to **Admin Panel → Agents → Teams**
+2. Create:
+    - **Tier I Support**
+    - **Tier II Support**
+
+### **Agent (Your Account)**
+
+1. Go to **Admin Panel → Agents → Add New Agent**
+2. Create your technician persona:
+    
+    ```
+    text
+    First Name:    [YOUR FIRST NAME]
+    Last Name:     [YOUR LAST NAME]
+    Email:         tech@homelab.local
+    Username:      tech
+    ```
+    
+    - Set a password
+    - Assign to **IT Support** department
+    - Add to **Tier I Support** team
+    - Set **Access** to All departments with ability to create and edit tickets
+
+![image.png](attachment:e3fa083d-1e52-4bcf-9093-fd1de85a56df:image.png)
+
+---
+
+### **D11: Take a VM Snapshot**
+
+This is **critical**. Before doing anything else, snapshot your working osTicket server.
+
+1. In VirtualBox Manager, select **osTicket-Server**
+2. Click the **Snapshots** tab (hamburger menu → Snapshots, or the camera icon)
+3. Click **Take** (camera icon)
+4. Name it:
+    
+    ```
+    
+    Name:         Clean-osTicket-Install
+    Description:  Fresh Ubuntu Server 22.04 + LAMP + osTicket configured.
+                  All SLAs, departments, help topics, and teams created.
+                  Static IP: 192.168.56.10
+    ```
+    
+5. Click **OK**
+
+> ***Why snapshot? If anything breaks in future labs, you can restore to this clean state in seconds instead of rebuilding from scratch. This mirrors real-world practices: snapshot before changes, rollback if needed.***
+> 
+
+![image.png](attachment:262bfa7b-36f4-44a4-8812-ab3bffc932c8:image.png)
+
+---
+
+### **D12: Credential Reference Sheet**
+
+Create a file **`C:\HomeLab\credentials.md`**:
+
+```
+Markdown
+# Home Lab Credentials
+⚠️ LAB USE ONLY — Never use these passwords in production
+
+## Ubuntu Server (osTicket-Server)
+- IP: 192.168.56.10
+- SSH User: labadmin
+- SSH Pass: ********
+
+## MySQL
+- Root: (socket auth, use sudo mysql)
+- DB Name: osticket
+- DB User: osticket_user
+- DB Pass: **********
+
+## osTicket Staff Panel
+- URL: http://192.168.56.10/osticket/scp/
+- Admin User: labadmin
+- Admin Pass: **********
+- Tech User: tech
+- Tech Pass: [whatever you set]
+
+## osTicket Client Portal
+- URL: http://192.168.56.10/osticket/
+```
+
+> ***Security Note: In a real environment, you'd use a password manager. For a local-only lab, this file is acceptable. Do NOT push this file to your public GitHub repo — we'll add it to `.gitignore`.***
+> 
+
+---
+
+## **PART E: Client VM Shell Creation**
+
+*Estimated Time: 30 minutes*
+
+These VMs are **configured but not installed**. The OS installations happen in Labs 01 and 02. Right now we're just creating the empty VMs with the right specs.
+
+---
+
+### **E1: Windows 10 VM Shell**
+
+1. Click **New** in VirtualBox Manager
+2. Configure:
+    
+    ```
+    
+    Name:            Win10-PC01
+    Folder:          C:\VirtualBox_VMs
+    ISO Image:       (leave empty — we'll attach it in Lab 02)
+    Type:            Microsoft Windows
+    Version:         Windows 10 (64-bit)
+    Skip Unattended: ✅
+    ```
+    
+3. **Hardware:**
+    
+    ```
+    
+    Base Memory:  4096 MB (4 GB)
+    Processors:   2
+    ```
+    
+4. **Virtual Hard Disk:**
+    
+    ```
+    
+    Create a Virtual Hard Disk Now
+    Disk Size: 50 GB
+    Pre-allocate: unchecked
+    ```
+    
+5. Click **Finish**
+6. Select **Win10-PC01** → **Settings** → **Network:**
+    
+    ```
+    
+    Adapter 1: NAT (enabled)
+    Adapter 2: Host-only Adapter (enabled)
+    ```
+    
+7. Click **OK**
+
+---
+
+### **E2: Windows 11 VM Shell**
+
+1. Click **New**
+2. Configure:
+    
+    ```
+    
+    Name:            Win11-PC01
+    Folder:          C:\VirtualBox_VMs
+    ISO Image:       (leave empty)
+    Type:            Microsoft Windows
+    Version:         Windows 11 (64-bit)
+    Skip Unattended: ✅
+    ```
+    
+    > ***VirtualBox 7.0+ automatically enables EFI and TPM 2.0 when you select Windows 11 (64-bit). If your version doesn't, we'll set it manually in step 6.***
+    > 
+3. **Hardware:**
+    
+    ```
+    
+    Base Memory:  4096 MB (4 GB)
+    Processors:   2
+    ```
+    
+4. **Virtual Hard Disk:**
+    
+    ```
+    
+    Disk Size: 64 GB
+    Pre-allocate: unchecked
+    ```
+    
+5. Click **Finish**
+6. **Verify Windows 11 requirements.** Select **Win11-PC01** → **Settings:**
+    - **System → Motherboard:** Confirm **Enable EFI** is ✅ checked
+    - **System → Motherboard:** Confirm **TPM** dropdown shows **v2.0** (VirtualBox 7.0+)
+    
+    If you don't see a TPM option:
+    
+    - Go to **Settings → Security** (in some VB versions) or **Settings → System → Encryption**
+    - Enable **TPM 2.0**
+    
+    > ***If your VirtualBox version doesn't support TPM: You can still install Windows 11 using registry workarounds during installation. We'll cover this in Lab 02 if needed.***
+    > 
+7. **Network:**
+    
+    ```
+    
+    Adapter 1: NAT (enabled)
+    Adapter 2: Host-only Adapter (enabled)
+    ```
+    
+
+---
+
+### **E3: Ubuntu Desktop VM Shell**
+
+1. Click **New**
+2. Configure:
+    
+    ```
+    
+    Name:            Ubuntu-PC01
+    Folder:          C:\VirtualBox_VMs
+    ISO Image:       (leave empty)
+    Type:            Linux
+    Version:         Ubuntu (64-bit)
+    Skip Unattended: ✅
+    ```
+    
+3. **Hardware:**
+    
+    ```
+    
+    Base Memory:  4096 MB (4 GB)
+    Processors:   2
+    ```
+    
+4. **Virtual Hard Disk:**
+    
+    ```
+    
+    Disk Size: 25 GB
+    Pre-allocate: unchecked
+    ```
+    
+5. **Network:**
+    
+    ```
+    
+    Adapter 1: NAT (enabled)
+    Adapter 2: Host-only Adapter (enabled)
+    ```
+    
+
+---
+
+### **E4: Linux Mint VM Shell**
+
+1. Click **New**
+2. Configure:
+    
+    ```
+    
+    Name:            Mint-PC01
+    Folder:          C:\VirtualBox_VMs
+    ISO Image:       (leave empty)
+    Type:            Linux
+    Version:         Ubuntu (64-bit)
+    Skip Unattended: ✅
+    ```
+    
+    > ***Why "Ubuntu" for Linux Mint? Mint is Ubuntu-based. VirtualBox doesn't have a Mint-specific option. Selecting Ubuntu (64-bit) provides the correct hardware defaults.***
+    > 
+3. **Hardware:**
+    
+    ```
+    
+    Base Memory:  2048 MB (2 GB)
+    Processors:   2
+    ```
+    
+4. **Virtual Hard Disk:**
+    
+    ```
+    
+    Disk Size: 25 GB
+    Pre-allocate: unchecked
+    ```
+    
+5. **Network:**
+    
+    ```
+    
+    Adapter 1: NAT (enabled)
+    Adapter 2: Host-only Adapter (enabled)
+    ```
+    
+
+---
+
+### **E5: Verify All VMs**
+
+Your VirtualBox Manager should now show 5 VMs:
+
+```
+text
+VirtualBox Manager
+├── osTicket-Server      [Running or Saved]    🟢
+├── Win10-PC01           [Powered Off]         ⚫
+├── Win11-PC01           [Powered Off]         ⚫
+├── Ubuntu-PC01          [Powered Off]         ⚫
+└── Mint-PC01            [Powered Off]         ⚫
+```
+
+![image.png](attachment:0f7a249a-65fb-4bc7-875c-c9af3acb873d:image.png)
+
+### **E6: Storage Audit**
+
+Let's verify disk usage. Open File Explorer, navigate to **`C:\VirtualBox_VMs\`** and check the total size:
+
+```
+text
+osTicket-Server/   ~4-5 GB (OS installed)
+Win10-PC01/        ~few MB (empty shell)
+Win11-PC01/        ~few MB (empty shell)
+Ubuntu-PC01/       ~few MB (empty shell)
+Mint-PC01/         ~few MB (empty shell)
+```
+
+Total current usage should be under 10 GB. As OSes are installed, this will grow.
+
+---
+
+## **PART F: Documenting Your Work**
+
+*Estimated Time: Varies by platform*
+
+---
+
+### **F1: Why Documentation Matters**
+
+Building this lab is an accomplishment. But if you can't show what
+you built and explain what you learned, it's invisible to employers,
+peers, and your future self.
+
+The technical skills from this lab — virtualization, networking,
+Linux server administration, web application deployment — are
+valuable. But the ability to **document what you did, why you did
+it, and what the outcome was** is what separates a hobbyist from a
+professional.
+
+Every IT department runs on documentation. Every ticket requires
+resolution notes. Every project needs a summary. If you build the
+habit now, it becomes second nature in the workplace.
+
+---
+
+### **F2: Choose Your Platform**
+
+How you document is less important than **that** you document.
+Choose whatever platform fits your workflow:
+
+| Platform | Best For | Cost |
+| --- | --- | --- |
+| **GitHub / GitLab** | Code-focused portfolios, version control, technical audiences | Free |
+| **Hashnode / [Dev.to](http://dev.to/)** | Blog-style write-ups, community engagement, SEO visibility | Free |
+| **Medium** | Long-form writing, broader non-technical audience | Free (limited) |
+| **WordPress** | Full website control, custom branding | Free (with hosting costs for custom domain) |
+| **Notion** | Personal knowledge base, internal documentation | Free |
+| **LinkedIn Articles** | Direct employer visibility, professional networking | Free |
+| **Physical Notebook** | Personal reference, interview prep | Cost of notebook |
+
+> ***My recommendation: Use at least two — one for detailed technical
+documentation (like GitHub or a blog) and one for professional
+visibility (like LinkedIn). The detailed version proves depth. The
+professional version gets you noticed.***
+> 
+
+Whatever you choose, be consistent. A portfolio with 15 documented
+labs on any platform is more impressive than a perfectly designed
+website with 2 posts.
+
+---
+
+### **F3: Use the STAR Method**
+
+Every lab you complete should be documented using the **STAR method**
+— the same framework used in behavioral job interviews. This serves
+two purposes: it structures your portfolio AND it prepares you to
+talk about your work in interviews.
+
+**STAR stands for:**
+
+```
+S — SITUATION
+    What was the context? Who needed help? What was the
+    business impact? What made it urgent?
+
+    Example: "NovaBridge Technologies, a managed service
+    provider, signed three new clients. Field technicians
+    needed standardized bootable USB toolkits before
+    onboarding site visits the following week."
+
+T — TASK
+    What were YOU specifically responsible for? What were
+    the constraints — deadline, tools available, scope?
+
+    Example: "As the IT Support Specialist, I needed to
+    create three types of bootable media and write
+    documentation so any technician could recreate
+    the toolkit independently."
+
+A — ACTION
+    What did you actually DO? Be specific — name the tools,
+    the commands, the steps. Include what DIDN'T work and
+    how you pivoted. This is where your technical depth shows.
+
+    Example: "I used Rufus to create a Windows 11 GPT
+    bootable USB, Ventoy for a multi-boot Linux diagnostic
+    drive, and the built-in Windows Recovery Drive tool.
+    During testing, the Windows USB failed to boot on a
+    UEFI machine. I diagnosed the root cause using diskpart,
+    identified an MBR/GPT mismatch, and recreated the USB
+    with the correct partition scheme."
+
+R — RESULT
+    What was the measurable outcome? How many users were
+    impacted? How much time was saved? What did you prevent
+    from happening again?
+
+    Example: "All three toolkits were delivered 2 days before
+    deadline. The Ventoy USB consolidated 4 tools into one
+    drive, reducing equipment per technician by 75%. The
+    documentation I created was adopted as the standard
+    procedure, preventing future boot failures."
+```
+
+### **STAR Template**
+
+Use this template for every lab you complete:
+
+# STAR Writeup — Lab [XX]: [TITLE]
+
+## Situation
+
+[WHO] at [COMPANY] experienced [PROBLEM] which caused
+[BUSINESS IMPACT]. [URGENCY/CONTEXT details].
+
+## Task
+
+As [YOUR ROLE], I needed to [OBJECTIVE] while ensuring
+[CONSTRAINT]. The deadline was [TIMEFRAME] and
+[ADDITIONAL REQUIREMENTS].
+
+## Action
+
+1. **Initial Assessment:** [What I checked first and
+what I observed]
+2. **Diagnosis:** [What tools/commands I used and what
+I discovered]
+3. **Resolution:** [Specific technical steps I took to
+fix the issue]
+4. **Verification:** [How I confirmed the fix worked]
+5. **Prevention:** [What I documented or recommended to
+prevent recurrence]
+
+### What Didn't Work (and Why)
+
+[Describe the first approach that failed and what it
+taught you about the root cause — this shows
+troubleshooting depth]
+
+## Result
+
+- ✅ [Primary outcome with specific metric]
+- ✅ [Secondary outcome — users impacted, time saved]
+- ✅ [Preventive measure implemented]
+- 📝 Documented in ticketing system with full root
+cause analysis
+
+> ***Why include "What Didn't Work"? Because troubleshootingis never a straight line. Showing your first attempt faileddemonstrates that you can adapt, learn, and persist.Interviewers specifically look for this. Anyone can describea success — professionals can describe the failures that ledto the success.***
+> 
+
+---
+
+### **F4: What to Document for Each Lab**
+
+At minimum, every lab should produce:
+
+1. WHAT YOU BUILT / FIXED
+    - Screenshots or screen recordings of key moments
+    - Before and after states
+    - The tools and commands you used
+2. WHAT YOU LEARNED
+    - Key concepts (in your own words, not textbook definitions)
+    - What surprised you
+    - What you'd do differently next time
+3. HOW IT CONNECTS TO THE JOB
+    - Which IT roles use this skill daily
+    - How you'd explain this to a non-technical manager
+    - What interview question this lab prepares you for
+4. THE TICKET
+    - If you built the osTicket system: log every lab as a
+    real ticket with resolution notes
+    - If you didn't: write resolution notes anyway in whatever
+    format you choose
+    - The habit of documenting resolutions is more valuable
+    than the platform you use
+
+> ***The goal is not perfection. The goal is consistency. A roughwrite-up published every week beats a polished masterpiecepublished never. Start messy. Get better as you go. The firstpost is always the hardest — every one after that gets easier.***
+> 
+
+---
+
+### **F5: Show Your Work**
+
+However you choose to document, make it **visible**. A portfolio
+
+that only exists on your local machine helps nobody — including you.
+
+Some ways to show your work:
+
+- **Post weekly on LinkedIn** — even a 5-sentence summary of whatyou learned this week builds your professional presence
+- **Share in IT communities** — Simply Cyber, r/ITCareerQuestions,r/CompTIA, Discord servers, local meetups
+- **Reference it in job applications** — link to your portfolio inyour resume, cover letter, and LinkedIn profile
+- **Talk about it in interviews** — "Let me show you the lab whereI built this" is more powerful than "I studied this for the exam"
+
+You built something real. Make sure people can see it.
+
+### For lab-00-condensed.md
+
+Replace the deleted Parts F and G with:
+
+```markdown
+## Part F: Document Your Work
+
+**Choose a documentation platform** (GitHub, blog, Notion, LinkedIn, etc.)
+
+**Document each lab using the STAR method:**
+
+```text
+S — Situation:  What was the context and business impact?
+T — Task:       What were you responsible for?
+A — Action:     What did you do? (tools, commands, steps)
+R — Result:     What was the measurable outcome?
+
+**Minimum output per lab:**
+
+1. Screenshots of key moments (before/after)
+2. Tools and commands used
+3. What you learned (your words, not textbook)
+4. Ticket resolution notes (osTicket or equivalent)
+5. STAR writeup for interview prep
+
+**Make it visible:**
+
+Post weekly. Share in communities.
+
+Link in applications. Talk about it in interviews.
+
+---
+
+## Updated Verification Checklist
+
+Replace the deleted GitHub and Hashnode checklist sections with:
+
+### For lab-00-full.md
+
+```markdown
+### **Documentation**
+
+```text
+[ ] Chosen a documentation platform (blog, GitHub, Notion, etc.)
+[ ] Understand the STAR method and can apply it to each lab
+[ ] Have a plan for making your work visible (LinkedIn, community, etc.)
+[ ] Credentials stored securely (not publicly accessible)
+[ ] Network documentation created with IP table and diagram
+
+---
+
+## Updated Verification Checklist
+
+Replace the deleted GitHub and Hashnode checklist sections with:
+
+### For lab-00-full.md
+
+```markdown
+### **Documentation**
+
+```text
+[ ] Chosen a documentation platform (blog, GitHub, Notion, etc.)
+[ ] Understand the STAR method and can apply it to each lab
+[ ] Have a plan for making your work visible (LinkedIn, community, etc.)
+[ ] Credentials stored securely (not publicly accessible)
+[ ] Network documentation created with IP table and diagram
+
+## Final Checklist
+
+---
+
+Go through this checklist and confirm every item. Check each box as you verify.
+
+### **VirtualBox Environment**
+
+```
+text
+[ ] VirtualBox installed and opens without errors
+[ ] Extension Pack installed and shows "Active"
+[ ] Default Machine Folder set to C:\VirtualBox_VMs
+[ ] Host-Only Network configured (192.168.56.1/24)
+[ ] Host-Only DHCP server enabled (range .100-.200)
+```
+
+### **Virtual Machines**
+
+```
+text
+[ ] osTicket-Server — Running, accessible via SSH and browser
+[ ] Win10-PC01 — Created, powered off, dual NICs configured
+[ ] Win11-PC01 — Created, powered off, EFI + TPM enabled, dual NICs
+[ ] Ubuntu-PC01 — Created, powered off, dual NICs configured
+[ ] Mint-PC01 — Created, powered off, dual NICs configured
+```
+
+### **osTicket**
+
+```
+text
+[ ] Apache serves pages at http://192.168.56.10
+[ ] osTicket Staff Panel accessible at http://192.168.56.10/osticket/scp/
+[ ] Can log in as labadmin
+[ ] Can log in as tech
+[ ] 4 SLA plans created (SEV-A through SEV-D)
+[ ] 3 departments created (IT Support, System Admin, Networking)
+[ ] 10 help topics created
+[ ] 2 teams created (Tier I, Tier II)
+[ ] Snapshot "Clean-osTicket-Install" saved
+```
+
+### **Network**
+
+```
+text
+[ ] Host can ping 192.168.56.10 (osTicket server)
+[ ] osTicket server can ping google.com (internet access)
+[ ] Network documentation file created with IP table and diagram
+[ ] Credentials file created (NOT in GitHub repo)
+```
+
+### **ISOs**
+
+```
+text
+[ ] Windows 10 Enterprise Evaluation ISO downloaded
+[ ] Windows 11 Enterprise Evaluation ISO downloaded
+[ ] Ubuntu Desktop 22.04 LTS ISO downloaded
+[ ] Linux Mint 21 ISO downloaded
+[ ] Ubuntu Server 22.04 LTS ISO downloaded
+[ ] All ISOs stored in C:\VirtualBox_ISOs\
+```
+
+---
+
+## **🎯 Skills From Lab 00**
+
+Even though this is a setup lab, you practiced real skills:
+
+| **Skill** | **What You Did** |
+| --- | --- |
+| **System Configuration** | Configured VirtualBox preferences, VM hardware specs, EFI/TPM settings |
+| **Local Area Networks** | Designed and implemented a virtual network with NAT and Host-Only adapters, assigned static IPs |
+| **Data Storage Technologies** | Created dynamically allocated virtual hard disks, planned storage allocation |
+| **Command-Line Interface** | Configured Ubuntu Server via CLI, installed LAMP stack |
+| **Information Systems Security** | Secured MySQL, set file permissions, created credential documentation, configured .gitignore for sensitive files |
+| **System Support** | Built and configured a Linux server from scratch, installed and configured a web application |
+
+---
+
+## **💡 What You'd Tell an Employer**
+
+> ***"Before starting any labs, I designed and built the entire infrastructure from scratch — a virtualized network with five machines, a help desk ticketing system running on a LAMP stack, and a documentation process for tracking every lab with measurable outcomes. Every lab I completed was logged as a real ticket with SLA tracking."***
+> 
+
+---
+
+## **⏭️ Bridge to Lab 01**
+
+Your environment is built. Your portfolio infrastructure is live. Your ticketing system is ready to receive its first ticket.
+
+In **Lab 01**, you step into the role of a technician at **NovaBridge Technologies**, a managed service provider. Your manager needs a field toolkit: bootable Windows and Linux USBs for client site visits. You'll create bootable media using Rufus and Ventoy — and when one of them won't boot, you'll troubleshoot why.
+
+---
+
+## **Quick Reference Card**
+
+Save this somewhere accessible — you'll reference it constantly:
+
+```
+text
+╔══════════════════════════════════════════════════════════╗
+║                  HOME LAB QUICK REFERENCE                ║
+╠══════════════════════════════════════════════════════════╣
+║                                                          ║
+║  osTicket Staff Panel:                                   ║
+║    http://192.168.56.10/osticket/scp/                    ║
+║    User: labadmin / osTicket2024!                        ║
+║                                                          ║
+║  osTicket Server SSH:                                    ║
+║    ssh labadmin@192.168.56.10                            ║
+║    Pass: LabAdmin2024!                                   ║
+║                                                          ║
+║  IP Addresses:                                           ║
+║    Host:      192.168.56.1                               ║
+║    osTicket:  192.168.56.10                              ║
+║    Win10:     192.168.56.100                             ║
+║    Win11:     192.168.56.101                             ║
+║    Ubuntu:    192.168.56.102                             ║
+║    Mint:      192.168.56.103                             ║
+║                                                          ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+---
+
+##

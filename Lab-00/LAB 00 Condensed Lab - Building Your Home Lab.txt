@@ -1,0 +1,455 @@
+#### **LAB 00: Building Your Home Lab & Professional Portfolio Infrastructure - Full Lab**
+
+### Prerequisites
+
+---
+
+- [ ]  Host machine with 16GB+ RAM (32GB recommended)
+- [ ]  50GB+ free disk space
+- [ ]  Internet connection for downloads
+- [ ]  GitHub account created
+
+---
+
+## Part A: VirtualBox Installation
+
+```
+1. Download VirtualBox + Extension Pack from virtualbox.org/wiki/Downloads
+2. Install VirtualBox (Run as Administrator, accept defaults)
+3. Install Extension Pack: File → Tools → Extension Pack Manager → Install
+4. Set Default Machine Folder: File → Preferences → General
+```
+
+```
+text
+Default Machine Folder: C:\VirtualBox_VMs
+```
+
+Create three folders:
+
+```
+text
+C:\VirtualBox_VMs
+C:\VirtualBox_ISOs
+C:\HomeLab
+```
+
+---
+
+## **Part B: Network Configuration**
+
+**Create Host-Only Network:**
+
+```
+text
+File → Tools → Network Manager → Create
+```
+
+Adapter settings:
+
+```
+text
+IPv4 Address:      192.168.56.1
+IPv4 Network Mask: 255.255.255.0
+```
+
+DHCP Server settings:
+
+```
+text
+Enable Server:     ✅
+Server Address:    192.168.56.100
+Server Mask:       255.255.255.0
+Lower Bound:       192.168.56.100
+Upper Bound:       192.168.56.200
+```
+
+**Verify on host:**
+
+```
+cmd
+ipconfig /all
+```
+
+Confirm **`VirtualBox Host-Only Network`** shows **`192.168.56.1`**
+
+---
+
+## **Part C: Download ISOs**
+
+Save all to **`C:\VirtualBox_ISOs\`**
+
+| **ISO** | **Source** |
+| --- | --- |
+| Windows 10 Enterprise | microsoft.com/en-us/evalcenter/evaluate-windows-10-enterprise |
+| Windows 11 Enterprise | microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise |
+| Ubuntu Desktop 22.04 | releases.ubuntu.com/22.04/ (Desktop image) |
+| Linux Mint 21 | linuxmint.com/download.php (Cinnamon) |
+| Ubuntu Server 22.04 | releases.ubuntu.com/22.04/ (Server image) |
+
+---
+
+## **Part D: osTicket Server Build**
+
+### **D1: Create VM**
+
+```
+text
+Name:      osTicket-Server
+Type:      Linux → Ubuntu (64-bit)
+RAM:       2048 MB
+CPU:       1
+Disk:      20 GB (dynamic)
+Adapter 1: NAT
+Adapter 2: Host-only Adapter
+ISO:       ubuntu-22.04.x-live-server-amd64.iso
+```
+
+### **D2: Install Ubuntu Server**
+
+Key installation choices:
+
+```
+text
+Language:           English
+Install type:       Ubuntu Server (not minimized)
+Storage:            Use Entire Disk, LVM unchecked
+Username:           labadmin
+Password:           LabAdmin2024!
+Server name:        osticket-server
+OpenSSH:            ✅ Install
+Featured Snaps:     Skip
+```
+
+### **D3: Post-Install Configuration**
+
+**Update system:**
+
+```
+Bash
+sudo apt update &&sudo apt upgrade -y
+```
+
+**Configure static IP:**
+
+```
+Bash
+sudo nano /etc/netplan/00-installer-config.yaml
+```
+
+```
+YAML
+network:
+  ethernets:
+    enp0s3:
+      dhcp4:true
+    enp0s8:
+      addresses:
+        -192.168.56.10/24
+  version:2
+```
+
+```
+Bash
+sudo netplan apply
+```
+
+**Verify:**
+
+```
+Bash
+ip addr show enp0s8
+```
+
+Expected: **`inet 192.168.56.10/24`**
+
+```
+Bash
+ping -c 4 google.com
+```
+
+**From host:**
+
+```
+cmd
+ping 192.168.56.10
+```
+
+### **D4: Install LAMP Stack**
+
+**Apache:**
+
+```
+Bash
+sudo apt install apache2 -y
+sudo systemctl enable apache2
+sudo systemctl start apache2
+```
+
+Verify: browse to **`http://192.168.56.10`** → "It works!"
+
+**MySQL:**
+
+```
+Bash
+sudo apt install mysql-server -y
+sudo systemctl enable mysql
+sudo systemctl start mysql
+sudo mysql_secure_installation
+```
+
+Secure installation answers: **`n, LabMySQL2024!, y, y, y, y`**
+
+**Create database:**
+
+```
+Bash
+sudo mysql
+```
+
+```
+SQL
+CREATE DATABASE osticket;
+CREATE USER 'osticket_user'@'localhost' IDENTIFIEDBY 'osTicketDB2024!';
+GRANT ALL PRIVILEGESON osticket.* TO 'osticket_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+**PHP:**
+
+```
+Bash
+sudo apt install php php-mysql php-cgi php-fpm php-cli php-curl php-gd php-imap php-mbstring php-intl php-apcu php-xml php-zip -y
+sudo a2enmod rewrite
+sudo systemctl restart apache2
+```
+
+### **D5: Install osTicket**
+
+```
+Bash
+sudo apt install unzip -y
+cd /tmp
+wget https://github.com/osTicket/osTicket/releases/download/v1.18.1/osTicket-v1.18.1.zip
+unzip osTicket-v1.18.1.zip -d /tmp/osticket
+sudo mv /tmp/osticket/upload /var/www/html/osticket
+sudo cp /var/www/html/osticket/include/ost-sampleconfig.php /var/www/html/osticket/include/ost-config.php
+sudo chown -R www-data:www-data /var/www/html/osticket
+sudo chmod 0666 /var/www/html/osticket/include/ost-config.php
+```
+
+**Web installer:** browse to **`http://192.168.56.10/osticket/setup/`**
+
+```
+text
+Helpdesk Name:    HomeLab IT Support
+Default Email:    helpdesk@homelab.local
+Admin User:       labadmin / osTicket2024!
+Admin Email:      admin@homelab.local
+MySQL Hostname:   localhost
+MySQL Database:   osticket
+MySQL Username:   osticket_user
+MySQL Password:   osTicketDB2024!
+```
+
+Click **Install Now**
+
+**Post-install lockdown:**
+
+```
+Bash
+sudo chmod 0644 /var/www/html/osticket/include/ost-config.php
+sudo rm -rf /var/www/html/osticket/setup
+```
+
+### **D6: Configure osTicket**
+
+**SLA Plans** (Admin Panel → Manage → SLA):
+
+```
+text
+SEV-A (Critical)  → 1 hour    → 24/7
+SEV-B (High)      → 4 hours   → 24/5
+SEV-C (Normal)    → 8 hours   → M-F 8am-5pm
+SEV-D (Low)       → 24 hours  → M-F 8am-5pm
+```
+
+**Departments** (Admin Panel → Agents → Departments):
+
+```
+text
+IT Support             → Public
+System Administration  → Public
+Networking             → Public
+```
+
+**Help Topics** (Admin Panel → Manage → Help Topics):
+
+```
+text
+Password Reset              → IT Support      → SEV-D
+Hardware Issue               → IT Support      → SEV-C
+Software Issue               → IT Support      → SEV-C
+Network Connectivity         → Networking      → SEV-B
+Access / Permissions         → IT Support      → SEV-C
+Workstation Not Booting      → IT Support      → SEV-B
+Malware / Security Incident  → System Admin    → SEV-A
+New Employee Setup           → IT Support      → SEV-C
+Printer Issue                → IT Support      → SEV-D
+General Inquiry              → IT Support      → SEV-D
+```
+
+**Teams** (Admin Panel → Agents → Teams):
+
+```
+text
+Tier I Support
+Tier II Support
+```
+
+**Agent** (Admin Panel → Agents → Add New Agent):
+
+```
+text
+Name:       [Your Name]
+Email:      tech@homelab.local
+Username:   tech
+Department: IT Support
+Team:       Tier I Support
+Access:     All departments
+```
+
+### **D7: Snapshot**
+
+```
+text
+VirtualBox → osTicket-Server → Snapshots → Take
+Name:        Clean-osTicket-Install
+Description: Fresh Ubuntu 22.04 + LAMP + osTicket configured.
+             SLAs, departments, help topics, teams created.
+             Static IP: 192.168.56.10
+```
+
+---
+
+## **Part E: Client VM Shells**
+
+### **Win10-PC01**
+
+```
+text
+Name:     Win10-PC01
+Type:     Microsoft Windows → Windows 10 (64-bit)
+RAM:      4096 MB | CPU: 2 | Disk: 50 GB (dynamic)
+Adapter 1: NAT | Adapter 2: Host-only
+```
+
+### **Win11-PC01**
+
+```
+text
+Name:     Win11-PC01
+Type:     Microsoft Windows → Windows 11 (64-bit)
+RAM:      4096 MB | CPU: 2 | Disk: 64 GB (dynamic)
+Adapter 1: NAT | Adapter 2: Host-only
+EFI: ✅ | TPM: 2.0
+```
+
+### **Ubuntu-PC01**
+
+```
+text
+Name:     Ubuntu-PC01
+Type:     Linux → Ubuntu (64-bit)
+RAM:      4096 MB | CPU: 2 | Disk: 25 GB (dynamic)
+Adapter 1: NAT | Adapter 2: Host-only
+```
+
+### **Mint-PC01**
+
+```
+text
+Name:     Mint-PC01
+Type:     Linux → Ubuntu (64-bit)
+RAM:      2048 MB | CPU: 2 | Disk: 25 GB (dynamic)
+Adapter 1: NAT | Adapter 2: Host-only
+```
+
+**Verify:** VirtualBox Manager shows 5 VMs (1 running, 4 powered off)
+
+---
+
+## **osTicket**
+
+```
+text
+Ubuntu Server SSH:     labadmin / LabAdmin2024!
+MySQL DB:              osticket / osticket_user / osTicketDB2024!
+osTicket Staff Panel:  http://192.168.56.10/osticket/scp/
+  Admin:               labadmin / osTicket2024!
+  Tech:                tech / [your password]
+osTicket Client:       http://192.168.56.10/osticket/
+```
+
+---
+
+## **Verification Checklist**
+
+```
+text
+VIRTUALBOX
+[ ] VirtualBox installed with Extension Pack active
+[ ] Default Machine Folder: C:\VirtualBox_VMs
+[ ] Host-Only Network: 192.168.56.1/24 with DHCP enabled
+
+VIRTUAL MACHINES
+[ ] osTicket-Server — running, accessible
+[ ] Win10-PC01 — shell created, dual NICs
+[ ] Win11-PC01 — shell created, dual NICs, EFI + TPM
+[ ] Ubuntu-PC01 — shell created, dual NICs
+[ ] Mint-PC01 — shell created, dual NICs
+
+OSTICKET
+[ ] Staff Panel accessible at http://192.168.56.10/osticket/scp/
+[ ] 4 SLA plans configured
+[ ] 3 departments created
+[ ] 10 help topics created
+[ ] 2 teams created
+[ ] Snapshot saved: "Clean-osTicket-Install"
+
+NETWORK
+[ ] Host pings 192.168.56.10 successfully
+[ ] Server pings google.com successfully
+[ ] Network documentation created
+
+DOCUMENTATON
+[ ] 
+[ ] 
+[ ] 
+[ ] 
+
+ISOS
+[ ] All 5 ISOs in C:\VirtualBox_ISOs\
+```
+
+---
+
+## **Quick Reference**
+
+```
+text
+╔══════════════════════════════════════════════════════════╗
+║  osTicket Staff:  http://192.168.56.10/osticket/scp/    ║
+║  osTicket Client: http://192.168.56.10/osticket/        ║
+║  Server SSH:      ssh labadmin@192.168.56.10            ║
+║                                                          ║
+║  Host:    192.168.56.1     Win10:  192.168.56.100       ║
+║  Server:  192.168.56.10    Win11:  192.168.56.101       ║
+║  Ubuntu:  192.168.56.102   Mint:   192.168.56.103       ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+---
+
+*Full walkthrough: [**lab-00-full.md**](https://arena.ai/c/lab-00-full.md) ·README: [**README.md**](https://arena.ai/c/README.md)*

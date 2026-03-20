@@ -1,0 +1,22 @@
+# Credentials - NEVER push passwords
+credentials.md
+*credentials*
+*passwords*
+*.secret
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# VM files (too large for GitHub)
+*.vdi
+*.vmdk
+*.vhd
+*.iso
+*.ova
+
+# Temp files
+*.tmp
+*.log
+~$*
